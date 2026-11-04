@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="home">
+  <div class="eyebrow">从执行结果到缺陷单</div>
+  <h1>少一点复制粘贴，<br><span>多一点测试时间。</span></h1>
+  <p class="lead">导入执行表，检查失败用例，一次确认完成提单。</p>
+  <div class="flow"><span><b>01</b> 导入执行表</span><i>→</i><span><b>02</b> 检查与修改</span><i>→</i><span><b>03</b> 批量提交</span></div>
+  <section class="import-panel">
+    <div class="panel-heading"><h2>从飞书执行表开始</h2><span class="tag">电子表格</span></div>
+    <form id="import-form"><label for="sheet-url">执行表链接</label><div class="import-input"><input id="sheet-url" type="url" value="{{ source_url }}" placeholder="https://your-team.feishu.cn/sheets/…" required autocomplete="off"><button class="button primary" type="submit" {% if mode == 'demo' %}disabled{% endif %}>读取失败用例 <span>→</span></button></div></form>
+    <p class="helper">{{ '当前为演示模式。先用示例走一遍完整流程，配置飞书后即可读取真实执行表。' if mode == 'demo' else '应用需要拥有执行表的阅读权限。每条 fail 生成一条草稿，确认后才会写入缺陷表。' }}</p>
+    <div class="demo-row"><div><strong>先试一份示例</strong><span>含 5 条失败用例，可体验修改、勾选和模拟提交</span></div><button id="demo-button" class="button secondary" type="button">体验示例 <span>↗</span></button></div>
+  </section>
+  <section class="import-panel local-import-panel">
+    <div class="panel-heading"><h2>导入本地执行结果和附件</h2><span class="tag">Excel / ZIP</span></div>
+    <form id="local-import-form"><label for="local-file">选择 .xlsx，或包含执行表和证据文件的 .zip</label><input id="local-file" type="file" accept=".xlsx,.zip" required><div class="import-input"><input id="local-sheet" aria-label="工作表名称" placeholder="工作表名称（留空取第一个）"><button class="button primary" type="submit">导入文件 →</button></div></form>
+    <p class="helper">Excel 内嵌图片按用例行关联；外部截图、视频请与执行表一起打包，证据列填写相对路径或文件名。只生成草稿，确认后才写入缺陷库。</p>
+  </section>
+  <section class="recent"><div class="section-heading"><h2>最近的批次</h2><span>{{ recent|length }} 个批次</span></div>
+    {% if recent %}<div class="batch-list">{% for batch in recent %}<a href="/batches/{{ batch.id }}" class="batch-link"><span class="document-icon">▤</span><div><strong>{{ batch.title }}</strong><span>{{ batch.created_at[:10] }} · {{ batch['items']|length }} 条失败 · {{ '示例' if batch.mode == 'demo' else ('本地文件' if batch.get('source_label', '').startswith('local:') else '飞书执行表') }}</span></div><span class="batch-link-arrow">→</span></a>{% endfor %}</div>
+    {% else %}<div class="empty-state"><span>▤</span><strong>还没有导入记录</strong><p>导入执行表或打开示例，开始第一批提单。</p></div>{% endif %}
+  </section>
+  <footer>生成草稿后由你确认，每一步都有提交结果。</footer>
+</main>
+{% endblock %}

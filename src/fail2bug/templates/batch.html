@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}审核草稿 · Fail2Bug{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static', path='review.css') }}">{% endblock %}
+{% block content %}
+<main class="workspace" id="review-app">
+  <nav class="breadcrumbs" aria-label="当前位置"><a href="/">工作台</a><span aria-hidden="true">/</span><span>审核草稿</span></nav>
+  <div class="workspace-heading"><h1>{{ batch.title }}</h1>{% if batch.source_url %}<a class="button secondary" href="{{ batch.source_url }}" target="_blank" rel="noopener noreferrer">打开原表 ↗</a>{% endif %}</div>
+  {% if batch.mode == 'demo' %}<p class="notice demo-notice">演示草稿，写入仅保存在本机。</p>{% endif %}
+  {% if batch.counts.unknown %}<details class="unknown-list"><summary>{{ batch.counts.unknown }} 条执行结果未识别，展开检查</summary><p>这些行未生成草稿，请先在源表将结果改为 fail、pass、blocked、skip 或留空，再重新导入。</p>{% for row in batch.skipped if row.result == 'unknown' %}<div>第 {{ row.row_no }} 行 · {{ row.case_id }} · 原值：<strong>{{ row.raw_result }}</strong></div>{% endfor %}</details>{% endif %}
+  {% if batch.get('warnings') %}<details class="unknown-list"><summary>{{ batch.warnings|length }} 条附件导入提示，展开检查</summary>{% for warning in batch.warnings %}<div>{{ warning }}</div>{% endfor %}</details>{% endif %}
+  <section class="defaults-panel">
+    <div class="section-heading"><h2>批次信息</h2></div>
+    <div class="defaults-grid">
+      {% for key, label, placeholder in [('reporter','提交人','如：张三'),('version','测试版本','如：2.8.0'),('device','测试设备','选择设备，可多选'),('environment','测试环境','选择系统，可多选')] %}
+      {% set hint = batch.get('default_hints', {}).get(key, {}) %}
+      <div class="field"><label>{{ label }}</label>
+        {% if hint.get('type') == 11 and hint.get('display_name') %}
+        <input type="hidden" data-default="{{ key }}" value="{{ batch.defaults[key] }}"><input aria-label="{{ label }}" value="{{ hint.display_name }}" readonly>
+        {% elif hint.get('options') %}
+        <div data-choice-default="{{ key }}" data-label="{{ label }}"></div>
+        {% else %}
+        <input aria-label="{{ label }}" data-default="{{ key }}" value="{{ batch.defaults.get(key,'') }}" placeholder="{{ '飞书 open_id（ou_ 开头）' if hint.get('type') == 11 else placeholder }}" autocomplete="off">
+        {% endif %}
+      </div>
+      {% endfor %}
+      {% if batch.defaults.get('project') or batch.get('default_hints', {}).get('project', {}).get('enabled') %}<div class="field"><label for="default-project">所属项目</label><input id="default-project" data-default="project" value="{{ batch.defaults.get('project','') }}" autocomplete="off"></div>{% endif %}
+    </div>
+  </section>
+  <section class="draft-panel"><div class="draft-toolbar"><h2>缺陷清单 <span class="count-badge">{{ batch['items']|length }}</span></h2><label class="checkbox-label"><input type="checkbox" id="select-all">全选</label></div>
+    {% if batch['items'] %}<div class="table-scroll"><table class="draft-table"><thead><tr><th class="check-column"><span class="sr-only">选择</span></th><th>缺陷</th><th>优先级</th><th>附件</th><th>状态</th><th><span class="sr-only">操作</span></th></tr></thead><tbody id="draft-rows"></tbody></table></div>
+    {% else %}<div class="empty-state"><strong>本批次没有失败用例</strong></div>{% endif %}
+  </section>
+  <div class="submit-bar" {% if not batch['items'] %}hidden{% endif %}>
+    <div class="submit-info"><strong id="submit-summary"></strong><span id="new-module-note" hidden></span><span id="save-status" role="status" hidden></span><span id="submit-error" role="alert" hidden></span></div>
+    <div class="submit-actions"><button class="button secondary" id="save-button">保存草稿</button><button class="button primary" id="submit-button">确认写入</button></div>
+  </div>
+</main>
+<dialog id="edit-dialog"><form id="edit-form">
+  <div class="dialog-heading"><div><span class="eyebrow" id="edit-case"></span><h2 id="edit-heading">检查缺陷内容</h2></div><button class="icon-button" id="close-dialog" type="button" aria-label="关闭">×</button></div>
+  <div class="dialog-body">
+    <div class="edit-title-row"><label>缺陷标题<input name="title" maxlength="300" required></label><label>优先级<select name="priority"><option>P0</option><option>P1</option><option>P2</option><option>P3</option></select></label></div>
+    <div class="classification-grid">
+      {% for key, label in [('module','模块'),('submodule','子模块'),('problem_type','问题类型'),('frequency','发生概率')] %}
+      {% if batch.get('default_hints',{}).get(key,{}).get('enabled') %}<div class="field"><label>{{ label }}</label><div data-choice-item="{{ key }}" data-label="{{ label }}"></div></div>{% endif %}
+      {% endfor %}
+    </div>
+    <label>【前提】：<textarea name="preconditions" rows="3" maxlength="20000"></textarea></label>
+    <label>【操作】：<textarea name="steps" rows="6" required maxlength="20000"></textarea></label>
+    <label>【预期结果】：<textarea name="expected" rows="3" required maxlength="20000"></textarea></label>
+    <label>【实际结果】：<textarea name="actual" rows="3" required maxlength="20000" placeholder="描述执行后实际发生了什么"></textarea></label>
+    <section class="attachment-section"><h3>证据附件</h3><div id="attachment-list"></div><input id="attachment-input" type="file" accept="image/*,video/*,.pdf,.txt,.log" multiple aria-label="添加证据文件"><p class="helper">单个文件最多 {{ max_attachment_mb }} MB</p></section>
+    <details class="evidence-details"><summary>证据备注或链接</summary><label><span class="sr-only">证据备注或链接</span><textarea name="evidence" rows="2" maxlength="10000"></textarea></label></details>
+  </div>
+  <div class="dialog-footer"><span id="edit-note" role="status" hidden></span><button class="button primary" id="apply-edit" type="submit">保存此条</button></div>
+</form></dialog>
+<script type="application/json" id="batch-data">{{ batch|tojson }}</script>
+{% endblock %}

@@ -218,3 +218,14 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Fail2Bug local configuration, runtime data and integration screenshots
+/.env.*
+!/.env.example
+/data/
+/.deepeval/
+.DS_Store
+/docs/attachments-live-proof.jpg
+/docs/fields-and-device.png
+/docs/live-review.png
+/docs/review-preview.png

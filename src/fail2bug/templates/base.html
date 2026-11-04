@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>{% block title %}Fail2Bug · 批量提 Bug{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}?v=2">
+  {% block styles %}{% endblock %}
+  <script src="{{ url_for('static', path='choices.js') }}" defer></script>
+  <script src="{{ url_for('static', path='app.js') }}?v=2" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-mark">f<span>2</span>b</span><strong>Fail2Bug</strong><span class="brand-divider"></span><span class="brand-description">失败用例批量提单</span></a>
+    <div class="topbar-right"><span class="mode-dot {{ mode }}"></span>{{ '演示模式' if mode == 'demo' else '飞书已配置' }}<span class="version">v0.1</span></div>
+  </header>
+  {% block content %}{% endblock %}
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

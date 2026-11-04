@@ -1,0 +1,76 @@
+/* Keep the review page focused on the decisions needed to submit a batch. */
+#review-app {max-width: 1180px; padding-top: 24px}
+#review-app .breadcrumbs {margin-bottom: 14px}
+#review-app .breadcrumbs a {color: var(--accent)}
+#review-app .workspace-heading {margin-bottom: 22px}
+#review-app .workspace-heading h1 {font-size: clamp(21px, 3vw, 29px); line-height: 1.3}
+#review-app .workspace-heading .button {flex-shrink: 0}
+#review-app .defaults-panel {padding: 18px 22px; margin-bottom: 18px}
+#review-app .section-heading {margin-bottom: 12px}
+#review-app .defaults-grid {grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 12px 16px}
+#review-app .draft-toolbar {padding: 15px 22px}
+#review-app .checkbox-label {font-size: 12px; color: #526170; cursor: pointer; padding: 6px 0}
+#review-app .count-badge {font-size: 11px; padding: 2px 7px}
+#review-app .draft-table th {font-size: 12px; color: #5f6d78}
+#review-app .draft-table td {padding-top: 13px; padding-bottom: 13px}
+#review-app .title-cell {width: 61%; max-width: none; overflow-wrap: anywhere}
+.bug-title {font-size: 14px; font-weight: 650; line-height: 1.5}
+.bug-ref {font-size: 12px; color: #637280; margin-top: 3px}
+#review-app .row-note {font-size: 12px; color: #8b5b15}
+#review-app .record-link, #review-app .evidence-cell, #review-app .status {font-size: 12px}
+#review-app .evidence-cell {white-space: nowrap; color: #536478}
+#review-app .muted-text {color: #687681}
+#review-app .status {border-radius: 999px; background: #eff6f2; padding: 4px 8px; color: #2a6a50}
+#review-app .status.incomplete, #review-app .status.unknown {background: #fff5e2; color: #8b5b15}
+#review-app .status.failed {background: #fbeceb; color: #a23834}
+#review-app .status.submitting {background: #eaf2fc; color: #365b86}
+#review-app .row-button {background: #ebf5f1; border-radius: 7px; padding: 8px 13px; font-size: 12px; font-weight: 600}
+#review-app .row-button:hover {background: #dceee7}
+#review-app .submit-bar {z-index: 4; padding: 12px 18px; gap: 14px; bottom: 12px; box-shadow: 0 5px 24px #202b3814}
+#review-app .submit-bar[hidden], #review-app .submit-info span[hidden] {display: none}
+#review-app .submit-info {min-width: 0; overflow-wrap: anywhere}
+#review-app .submit-info strong {font-size: 14px}
+#review-app .submit-info span {display: block; margin-top: 4px; font-size: 12px}
+#review-app #new-module-note {color: #76541e}
+#review-app #submit-error {color: #a23834}
+#review-app .submit-actions {display: flex; gap: 9px; flex-shrink: 0}
+#review-app .submit-actions .button {min-width: 96px; padding: 9px 14px}
+#review-app .empty-state {border: 0; border-top: 1px solid var(--line); border-radius: 0}
+#edit-dialog {width: min(730px, calc(100vw - 24px))}
+#edit-dialog .dialog-body {gap: 15px}
+.edit-title-row {display: grid; grid-template-columns: minmax(0, 1fr) 90px; gap: 12px; align-items: end}
+#edit-dialog .dialog-footer .button {margin-left: auto}
+#edit-dialog #edit-note {color: #8b5b15}
+#edit-dialog .attachment-section > input {margin-top: 8px}
+#edit-dialog .attachment-section > .helper {margin: 4px 0 0}
+.evidence-details {font-size: 12px; color: #526170}
+.evidence-details > summary {cursor: pointer}
+@media (max-width: 650px) {
+  #review-app .table-scroll {overflow: visible; padding: 0 12px 12px}
+  #review-app .draft-table, #review-app .draft-table tbody {display: block}
+  #review-app .draft-table thead {display: none}
+  #review-app .draft-table tr {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) auto auto;
+    gap: 9px 8px;
+    align-items: center;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 12px;
+    margin-bottom: 8px;
+  }
+  #review-app .draft-table tr:last-child {margin-bottom: 0}
+  #review-app .draft-table td {display: block; padding: 0 !important; border: 0; min-width: 0 !important; max-width: none !important}
+  #review-app .draft-table td::before {display: none}
+  #review-app .draft-table .check-column {grid-area: 1 / 1; align-self: start; width: auto; margin-top: 2px}
+  #review-app .draft-table .title-cell {grid-area: 1 / 2 / 2 / -1; width: auto}
+  #review-app .priority-cell {grid-area: 2 / 2}
+  #review-app .evidence-cell {grid-area: 3 / 2}
+  #review-app .state-cell {grid-area: 2 / 3 / 4 / 4}
+  #review-app .action-cell {grid-area: 2 / 4 / 4 / 5}
+  #review-app .row-button {width: auto; padding: 8px 10px}
+  #review-app .submit-bar {padding: 10px 12px; gap: 8px; bottom: 8px; flex-wrap: wrap}
+  #review-app .submit-info {width: 100%}
+  #review-app .submit-actions {width: 100%; display: grid; grid-template-columns: 1fr 1.4fr}
+  #review-app .submit-actions .button {width: 100%; min-height: 40px}
+}
