@@ -13,7 +13,7 @@ from xml.etree import ElementTree
 
 from openpyxl import load_workbook
 
-from .parser import InputError, parse_table, HEADERS, clean, cell_text
+from .parser import InputError, parse_table, HEADERS, column_header, clean, cell_text
 
 MEDIA_EXTENSIONS = {'.png','.jpg','.jpeg','.gif','.webp','.bmp','.heic','.heif','.mp4','.mov','.m4v','.webm','.mkv','.avi','.txt','.log','.pdf'}
 DISPIMG = re.compile(r'=\s*(?:_xlfn\.)?DISPIMG\s*\(\s*"([^"]+)"\s*[,;]\s*\d+\s*\)', re.IGNORECASE)
@@ -154,7 +154,7 @@ def read_workbook(path: Path, root: Path, *, sheet: str | None, max_rows: int, m
         rows = [[cell.value for cell in row] for row in page.iter_rows()]
         evidence_column = None
         if rows:
-            header_at=max(range(min(10,len(rows))),key=lambda index:sum(clean(cell_text(value)) in HEADERS for value in rows[index]))
+            header_at=max(range(min(10,len(rows))),key=lambda index:sum(column_header(value) in HEADERS for value in rows[index]))
             for column,value in enumerate(rows[header_at]):
                 if clean(cell_text(value))=='证据':
                     evidence_column = column + 1

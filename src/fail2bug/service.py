@@ -219,8 +219,9 @@ class Service:
                 payload[name] = choices
             elif kind == 3:
                 allowed = {option["name"] for option in (field.get("property") or {}).get("options", [])}
-                fallback = name == self.settings.field_submodule and text == item.get("module", "").replace("\n", "、")
-                if text and text not in allowed and not fallback:
+                project = len(entries) == 1 and entries[0][0] == "project"
+                submodule_fallback = name == self.settings.field_submodule and text == item.get("module", "").replace("\n", "、")
+                if text and text not in allowed and not (project or submodule_fallback):
                     raise InputError(f"「{name}」没有选项「{text}」，请使用缺陷表已有选项。")
                 payload[name] = text
             else:

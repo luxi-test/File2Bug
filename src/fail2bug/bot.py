@@ -13,6 +13,28 @@ from .store import Store
 LOGGER = logging.getLogger(__name__)
 
 
+def _post_text(content):
+    if "content" not in content:
+        content = next((content[key] for key in ("zh_cn", "en_us", "ja_jp") if isinstance(content.get(key), dict)), {})
+    paragraphs = content.get("content")
+    if not isinstance(paragraphs, list):
+        return ""
+    lines = []
+    for paragraph in paragraphs:
+        if not isinstance(paragraph, list):
+            continue
+        parts = []
+        for node in paragraph:
+            if not isinstance(node, dict):
+                continue
+            if node.get("tag") == "text" and isinstance(node.get("text"), str):
+                parts.append(node["text"])
+            elif node.get("tag") == "a" and isinstance(node.get("href"), str):
+                parts.append(" " + node["href"] + " ")
+        lines.append("".join(parts))
+    return "\n".join(lines).strip()
+
+
 def make_message_handler(settings, store, client, bot_id, service, executor):
     allowed = {value.strip() for value in settings.allowed_users.split(',') if value.strip()}
     controller = ChatController(settings,store,client,service)
@@ -46,11 +68,18 @@ def make_message_handler(settings, store, client, bot_id, service, executor):
         event=data.event;message=event.message;sender=event.sender
         open_id=sender.sender_id.open_id if sender and sender.sender_id else ''
         if not open_id or getattr(sender,'sender_type','user')!='user':return
-        if message.message_type not in {'text','file','image','media'}:return
+        if message.message_type not in {'text','post','file','image','media'}:return
         if message.chat_type!='p2p' and not any(mention.id and mention.id.open_id==bot_id for mention in (message.mentions or [])):return
         try:content=json.loads(message.content)
         except (ValueError,TypeError):return
-        if message.message_type=='text':
+        if not isinstance(content, dict):return
+        message_type = message.message_type
+        if message_type == 'post':
+            text = _post_text(content)
+            if not text.startswith('解析'):
+                return
+            content, message_type = {'text': text}, 'text'
+        if message_type=='text':
             text=re.sub(r'@_user_\d+','',content.get('text','')).strip();content['text']=text
             if message.chat_type=='p2p' and text.lower() in {'我的id','whoami'}:
                 if store.reserve_event(data.header.event_id or message.message_id):executor.submit(identity,message.chat_id,open_id)
@@ -58,7 +87,8 @@ def make_message_handler(settings, store, client, bot_id, service, executor):
         if open_id not in allowed:return
         event_id=data.header.event_id or message.message_id
         if not store.reserve_event(event_id):return
-        executor.submit(process,message.chat_id,open_id,content,message.message_type,message.message_id)
+        LOGGER.info('收到飞书消息，类型：%s', message.message_type)
+        executor.submit(process,message.chat_id,open_id,content,message_type,message.message_id)
     return on_message
 
 

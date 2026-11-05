@@ -132,7 +132,8 @@ def test_restart_preserves_operation_for_retry(service):
     assert service.client.calls == [({"缺陷标题": "原始标题"}, "existing-operation")]
 
 
-def test_existing_table_field_types_and_combined_description(service):
+@pytest.mark.parametrize("project", ["测试项目", "新测试项目"])
+def test_existing_table_field_types_and_combined_description(service, project):
     settings = service.settings
     settings.field_steps = settings.field_expected = settings.field_actual = "重现步骤"
     settings.field_version = settings.field_case_id = settings.field_evidence = settings.field_source = "备注"
@@ -147,12 +148,12 @@ def test_existing_table_field_types_and_combined_description(service):
         "所属项目": {"type": 3, "property": {"options": [{"name": "测试项目"}]}},
     }
     item = new_batch(service)["items"][0]
-    defaults = {"reporter": "ou_testuser", "device": "测试手机", "environment": "Android", "project": "测试项目", "version": "1.0"}
+    defaults = {"reporter": "ou_testuser", "device": "测试手机", "environment": "Android", "project": project, "version": "1.0"}
     fields = service._fields(item, defaults, schema, "https://team.feishu.cn/sheets/test")
     assert fields["提交人(QA)"] == [{"id": "ou_testuser"}]
     assert fields["设备"] == ["测试手机"]
     assert fields["系统"] == ["Android"]
-    assert fields["所属项目"] == "测试项目"
+    assert fields["所属项目"] == project
     assert all(value in fields["重现步骤"] for value in [item["steps"], item["expected"], item["actual"]])
     assert all(value in fields["备注"] for value in [item["case_id"], "1.0", "https://team.feishu.cn/sheets/test"])
 

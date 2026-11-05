@@ -17,6 +17,12 @@ HEADERS = {
     "复现次数": "reproductions", "执行次数": "attempts",
 }
 REQUIRED = {"用例ID", "PRD模块", "标题", "优先级", "操作步骤", "预期结果", "执行结果"}
+HEADER_ALIASES = {
+    "用例编号": "用例ID",
+    "所属模块": "PRD模块",
+    "用例标题": "标题",
+    "测试步骤": "操作步骤",
+}
 ALIASES = {
     "pass": {"pass", "passed", "p", "ok", "通过", "成功", "已通过"},
     "fail": {"fail", "failed", "f", "ng", "nok", "失败", "不通过", "未通过"},
@@ -48,6 +54,11 @@ def clean(value: str) -> str:
     return " ".join(unicodedata.normalize("NFKC", value).replace("\u200b", "").replace("\ufeff", "").strip().split())
 
 
+def column_header(value) -> str:
+    header = clean(cell_text(value))
+    return HEADER_ALIASES.get(header, header)
+
+
 def normalize_result(value) -> str:
     text = clean(cell_text(value)).lower()
     # 仅处理明确的双语标签，避免把“通过(但失败)”错误识别成通过。
@@ -64,9 +75,9 @@ def normalize_result(value) -> str:
 def parse_table(rows: list[list], source_url: str) -> dict:
     if not rows:
         raise InputError("表格为空，请检查执行表是否有表头和用例。")
-    scores = [sum(clean(cell_text(cell)) in HEADERS for cell in row) for row in rows[:10]]
+    scores = [sum(column_header(cell) in HEADERS for cell in row) for row in rows[:10]]
     header_at = max(range(len(scores)), key=scores.__getitem__)
-    headers = [clean(cell_text(value)) for value in rows[header_at]]
+    headers = [column_header(value) for value in rows[header_at]]
     missing = sorted(REQUIRED - set(headers))
     if missing:
         raise InputError("执行表缺少列：" + "、".join(missing))

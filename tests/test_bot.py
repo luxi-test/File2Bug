@@ -64,3 +64,19 @@ def test_bot_import_uses_sender_as_reporter(tmp_path, link):
     url = 'https://test.feishu.cn/sheets/abc?sheet=tab1'
     handler(event('解析 ' + link.format(url=url)))
     assert service.calls == [(url, 'ou_me')]
+
+
+def test_bot_reads_spreadsheet_link_in_rich_text(tmp_path):
+    settings = Settings(_env_file=None, database=tmp_path / "db.sqlite", allowed_users="ou_me")
+    store = Store(settings.database)
+    client, service = Client(), Service(store)
+    handler = make_message_handler(settings, store, client, "ou_bot", service, ImmediateExecutor())
+    url = "https://test.feishu.cn/sheets/abc?sheet=tab1"
+    incoming = event("")
+    incoming.event.message.message_type = "post"
+    incoming.event.message.content = json.dumps({"content": [[
+        {"tag": "text", "text": "解析"},
+        {"tag": "a", "text": "测试执行表", "href": url},
+    ]]})
+    handler(incoming)
+    assert service.calls == [(url, "ou_me")]

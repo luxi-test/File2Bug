@@ -28,6 +28,20 @@ def test_column_order_and_source_row_numbers():
     assert result["items"][0]["row_no"] == 4
 
 
+def test_execution_table_accepts_alternate_case_headers():
+    rows = demo_table()
+    aliases = {"用例ID": "用例编号", "PRD模块": "所属模块", "标题": "用例标题", "操作步骤": "测试步骤"}
+    rows[0] = [aliases.get(header, header) for header in rows[0]]
+    item = parse_table(rows, "")["items"][0]
+    assert item["case_id"] == "TC-021"
+    assert item["module"] == "设备连接"
+    assert "重新连接" in item["title"]
+    assert "修改设备名称" in item["steps"]
+    rows[0].append("用例ID")
+    with pytest.raises(InputError, match="表头重复"):
+        parse_table(rows, "")
+
+
 def test_missing_and_duplicate_headers_rejected():
     with pytest.raises(InputError, match="缺少列"):
         parse_table([["标题"], ["失败"]], "")
