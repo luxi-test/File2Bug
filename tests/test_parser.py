@@ -1,7 +1,7 @@
 import pytest
 
 from fail2bug.feishu import column_name, parse_sheet_url
-from fail2bug.parser import InputError, demo_table, normalize_result, parse_table
+from fail2bug.parser import InputError, demo_table, normalize_result, parse_table, title_without_module
 
 
 @pytest.mark.parametrize("value,expected", [("失败（Fail）", "fail"), (" PASS ", "pass"), ("⭕", "unknown"), ("通过(但失败)", "unknown"), (None, "not_run"), ("环境问题", "blocked")])
@@ -18,6 +18,7 @@ def test_all_failures_kept_and_actual_not_invented():
     assert missing["actual"] == ""
     assert "请补充实际结果" in missing["issues"]
     assert "重新连接" in result["items"][0]["title"]
+    assert result["items"][0]["title"] == "重新连接后设备名称未更新"
 
 
 def test_column_order_and_source_row_numbers():
@@ -60,3 +61,13 @@ def test_rejects_unsupported_urls(url):
 def test_sheet_url_and_columns():
     assert parse_sheet_url("https://team.feishu.cn/sheets/abc123?sheet=xyz") == ("abc123", "xyz")
     assert [column_name(value) for value in [1, 26, 27, 100]] == ["A", "Z", "AA", "CV"]
+
+
+@pytest.mark.parametrize("title,expected", [
+    ("[添加眼镜] 其他手机已连接", "其他手机已连接"),
+    ("【添加眼镜】其他手机已连接", "其他手机已连接"),
+    ("[异常路径] 其他手机已连接", "[异常路径] 其他手机已连接"),
+    ("其他手机已连接", "其他手机已连接"),
+])
+def test_title_removes_only_the_matching_module_prefix(title, expected):
+    assert title_without_module(title, "添加眼镜") == expected

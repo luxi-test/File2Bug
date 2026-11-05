@@ -80,6 +80,49 @@ def test_unknown_retry_uses_identical_operation_and_payload(service):
     assert final["items"][0]["status"] == "succeeded"
 
 
+def test_dated_three_part_notes_keep_original_date_and_payload_on_retry(service, monkeypatch):
+    from datetime import datetime
+    from types import SimpleNamespace
+    import fail2bug.service as service_module
+
+    settings = service.settings
+    settings.field_version = settings.field_case_id = settings.field_evidence = settings.field_source = "备注"
+    batch = ready(service, new_batch(service))
+    def evidence(value):
+        value["source_url"] = "https://team.feishu.cn/sheets/example?sheet=tab"
+        value["items"][0]["evidence"] = "已提单"
+    batch = service.store.mutate(batch["id"], evidence)
+    monkeypatch.setattr(service_module, "datetime", SimpleNamespace(
+        now=lambda zone: datetime(2026, 11, 5, 23, 59, tzinfo=zone)))
+    service.client.failures = [SubmissionUnknown("响应丢失")]
+    result = service.submit(batch["id"], batch["revision"])
+    assert service.client.calls[0][0]["备注"] == (
+        "2026-11-05 QA:\n"
+        "【测试版本】\n1.0\n"
+        "【关联用例】\nTC-021\n"
+        "【来源链接】\nhttps://team.feishu.cn/sheets/example?sheet=tab"
+    )
+    result = service.store.mutate(batch["id"], lambda value: value["defaults"].update(version="2.0"))
+    monkeypatch.setattr(service_module, "datetime", SimpleNamespace(
+        now=lambda zone: datetime(2026, 11, 6, 0, 1, tzinfo=zone)))
+    service.submit(batch["id"], result["revision"])
+    assert service.client.calls[0] == service.client.calls[1]
+
+
+@pytest.mark.parametrize("status,record_id,expected", [
+    ("pending", "", "原始标题"),
+    ("failed", "", "原始标题"),
+    ("unknown", "", "[设备连接] 原始标题"),
+    ("succeeded", "existing-record", "[设备连接] 原始标题"),
+])
+def test_legacy_draft_title_cleanup_respects_submission_state(service, status, record_id, expected):
+    batch = new_batch(service)
+    def legacy(value):
+        value["items"][0].update(title="[设备连接] 原始标题", status=status, record_id=record_id)
+    service.store.mutate(batch["id"], legacy)
+    assert service.review(batch["id"])["items"][0]["title"] == expected
+
+
 def test_partial_failure_retries_failed_item_only(service):
     batch = ready(service, new_batch(service), selected=2)
     service.client.failures = [FeishuError("字段类型错误")]

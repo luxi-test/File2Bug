@@ -1,15 +1,18 @@
 from pathlib import Path
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from uuid import uuid4
 import shutil
 
 from .config import Settings
 from .feishu import FeishuClient, FeishuError, SubmissionUnknown
 from .models import ReviewUpdate, draft_issues
-from .parser import InputError, demo_table, parse_table
+from .parser import InputError, demo_table, parse_table, title_without_module
 from .store import Conflict, Store
 from .inference import apply_frequency, infer_item
 from .repro import format_repro
 from .local_source import open_local, read_workbook
+from .online_source import attach_sheet_media
 
 METADATA = {"problem_type": "问题类型", "module": "模块", "submodule": "子模块", "frequency": "发生概率"}
 EDITABLE_METADATA = {*METADATA, "selected", "preconditions", "test_data", "steps", "expected", "actual"}
@@ -38,7 +41,13 @@ class Service:
         hints = self._hints(schema, reporter)
         for item in parsed["items"]:
             infer_item(item, hints)
-        batch = self.store.create(parsed, target=self.settings.target_id, mode="live", title=title, reporter=reporter or self.settings.default_reporter, project=self.settings.default_project, environment=self.settings.default_environment, default_hints=hints)
+        cached = attach_sheet_media(self.client, self.settings, parsed, rows, canonical, self.attachment_path)
+        try:
+            batch = self.store.create(parsed, target=self.settings.target_id, mode="live", title=title, reporter=reporter or self.settings.default_reporter, project=self.settings.default_project, environment=self.settings.default_environment, default_hints=hints)
+        except BaseException:
+            for path in cached:
+                path.unlink(missing_ok=True)
+            raise
         return self._decorate(batch)
 
     def import_demo(self) -> dict:
@@ -136,6 +145,8 @@ class Service:
         batch["defaults"].pop("problem_type", None)
         batch["defaults"].pop("frequency", None)
         for item in batch["items"]:
+            if not item.get("record_id") and item["status"] in {"pending", "failed"}:
+                item["title"] = title_without_module(item.get("title", ""), item.get("module", ""))
             for key in METADATA:
                 item.setdefault(key, "")
             item.setdefault("attachments", [])
@@ -200,6 +211,11 @@ class Service:
         payload = {}
         for name, entries in groups.items():
             text = entries[0][1] if len(entries) == 1 else "\n\n".join(f"【{labels.get(key, key)}】\n{value}" for key, value in entries if value)
+            note_keys = ("version", "case_id", "source")
+            if set(note_keys).issubset(key for key, _ in entries):
+                note_values = dict(entries)
+                written_on = datetime.now(ZoneInfo("Asia/Shanghai")).date().isoformat()
+                text = f"{written_on} QA:\n" + "\n".join(f"【{labels[key]}】\n{note_values[key]}" for key in note_keys)
             if name == self.settings.field_steps:
                 text = format_repro(item)
             field = (schema or {}).get(name, {})

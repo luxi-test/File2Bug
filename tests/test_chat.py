@@ -26,6 +26,8 @@ class Client:
             ['用例ID','PRD模块','标题','优先级','操作步骤','预期结果','执行结果','备注'],
             ['CHAT-1','相册','照片保存失败','P2','点击拍照','保存图片','fail','图片没有保存'],
         ],'聊天测试',url
+    def read_sheet_media(self, url, row_numbers, column_count, row_count): return []
+    def read_float_images(self, url): return []
     def send_text(self,chat_id,text):self.messages.append((chat_id,text))
     def send_card(self,chat_id,title,content):self.messages.append((chat_id,title+'\n'+content))
     def create_record(self,fields,operation_id):
@@ -95,13 +97,13 @@ def test_chat_file_import_uses_sender_identity(chat,tmp_path):
 
 def test_import_and_resume_reply_with_current_batch_review_link(chat):
     controller,client=chat
-    controller.settings.base_url='http://192.0.2.10:8000/'
+    controller.settings.base_url='http://192.168.1.99:8000/'
     start(controller)
     batch=controller.batch('chat','ou_me')
     for command in ('审核链接', '使用 '+batch['id'][:8]):
         controller.handle_text('chat',command,'ou_me')
         message=client.messages[-1][1]
-        assert f"[打开审核与补充页面](http://192.0.2.10:8000/review/{batch['id']}#access=" in message
+        assert f"[打开审核与补充页面](http://192.168.1.99:8000/review/{batch['id']}#access=" in message
         assert '24 小时' in message and '同一局域网' in message
         assert '设置 版本=' not in message and not client.created
         assert controller.settings.access_key.get_secret_value() not in message

@@ -15,12 +15,12 @@ def main():
         run_bot()
     elif args.command == 'import':
         from pathlib import Path
-        from .config import Settings
+        from .management import load_settings
         from .feishu import FeishuClient
         from .service import Service
         from .store import Store
         if not args.file:parser.error('import 需要 --file')
-        settings=Settings();client=FeishuClient(settings)
+        settings=load_settings();client=FeishuClient(settings)
         try:
             batch=Service(settings,Store(settings.database),client).import_file(Path(args.file),sheet=args.sheet)
             print(f"已生成草稿：{len(batch['items'])} 条失败 / {sum(len(item['attachments']) for item in batch['items'])} 个附件")
@@ -30,10 +30,10 @@ def main():
             for warning in batch.get('warnings',[]):print('提示：'+warning)
         finally:client.close()
     elif args.command == "verify":
-        from .config import Settings
+        from .management import load_settings
         from .feishu import FeishuClient, FeishuError
         from .parser import InputError, parse_table
-        settings = Settings()
+        settings = load_settings()
         if settings.mode != "live":
             raise SystemExit("请先在 .env 中配置 live 模式及飞书应用信息。")
         client = FeishuClient(settings)
@@ -65,8 +65,8 @@ def main():
     else:
         import uvicorn
         from .app import create_app
-        from .config import Settings
-        settings=Settings()
+        from .management import load_settings
+        settings=load_settings()
         uvicorn.run(create_app(settings), host=args.host or settings.host, port=args.port)
 
 

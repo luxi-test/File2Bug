@@ -106,14 +106,20 @@
     const picked = selected(), updates = picked.filter(item => item.record_id).length;
     const incomplete = picked.filter(item => missing(item).length).length;
     const actions = [picked.length > updates && `新建 ${picked.length - updates} 条`, updates && `更新 ${updates} 条`, incomplete && `${incomplete} 条待补充`].filter(Boolean);
-    $('#submit-summary').textContent = actions.join(' · ') || '请选择要写入的缺陷';
+    const completed = batch.items.filter(item => item.status === 'succeeded' && !metadataDirty(item)).length;
+    const allCompleted = completed > 0 && completed === batch.items.length;
+    let summary = '请选择要写入的缺陷';
+    if (actions.length) summary = actions.join(' · ');
+    else if (allCompleted) summary = `已全部写入，共 ${completed} 条缺陷`;
+    else if (completed) summary = `已写入 ${completed} 条，请选择剩余缺陷`;
+    $('#submit-summary').textContent = summary;
     const moduleHint = batch.default_hints?.module;
     const newModules = batch.mode === 'live' && moduleHint?.type === 4
       ? [...new Set(picked.filter(item => item.status !== 'unknown').flatMap(item => effective(item, 'module').split('\n').map(value => value.trim()).filter(value => value && !moduleHint.options.includes(value))))]
       : [];
     showMessage('#new-module-note', newModules.length ? `写入时将新增模块选项：${newModules.join('、')}` : '');
     $('#submit-button').disabled = busy || !picked.length || batch.items.some(item => item.status === 'submitting');
-    if (!busy) $('#submit-button').textContent = batch.mode === 'demo' ? '模拟写入' : updates && updates === picked.length ? '确认更新' : '确认写入';
+    if (!busy) $('#submit-button').textContent = allCompleted ? '已全部写入' : batch.mode === 'demo' ? '模拟写入' : updates && updates === picked.length ? '确认更新' : '确认写入';
     $('#save-button').disabled = busy || !dirty || batch.items.some(item => item.status === 'submitting');
     $('#select-all').checked = eligible().length > 0 && eligible().every(item => item.selected);
     $('#select-all').indeterminate = picked.length > 0 && picked.length < eligible().length;

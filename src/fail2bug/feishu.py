@@ -143,6 +143,73 @@ class FeishuClient:
         canonical = f"https://{urlparse(url).hostname}/sheets/{token}?sheet={sheet['sheet_id']}"
         return rows, sheet.get("title", "执行表"), canonical
 
+    def read_sheet_media(self, url: str, row_numbers: set[int], column_count: int, row_count: int):
+        """Read media metadata without changing the rendered values used for parsing."""
+        token, sheet_id = parse_sheet_url(url)
+        if not row_numbers:
+            return
+        page_rows = max(1, min(500, 5000 // column_count))
+        starts = sorted({((row - 1) // page_rows) * page_rows + 1 for row in row_numbers})
+        for start in starts:
+            stop = min(start + page_rows - 1, row_count)
+            span = f"{sheet_id}!A{start}:{column_name(column_count)}{stop}"
+            data = self._request("GET", f"/sheets/v2/spreadsheets/{token}/values/{quote(span, safe='')}",
+                                 params={"valueRenderOption": "Formula"})
+            if "valueRange" not in data:
+                raise FeishuError("飞书未返回附件所在单元格的内容。")
+            values = data["valueRange"].get("values", [])
+            if len(values) > stop - start + 1:
+                raise FeishuError("飞书返回的附件行范围不正确。")
+            for row_no, cells in enumerate(values, start):
+                if row_no in row_numbers:
+                    yield row_no, cells
+
+    def read_float_images(self, url: str):
+        token, sheet_id = parse_sheet_url(url)
+        data = self._request("GET", f"/sheets/v3/spreadsheets/{token}/sheets/{sheet_id}/float_images/query")
+        return data.get("items", [])
+
+    def download_media(self, file_token: str, destination: Path, name: str, max_bytes: int) -> dict:
+        import mimetypes
+        from email.message import Message
+        from urllib.parse import unquote
+
+        url = self.BASE_URL + f"/drive/v1/medias/{quote(file_token, safe='')}/download"
+        try:
+            with self.http.stream("GET", url, headers={"Authorization": f"Bearer {self._access_token()}"}) as response:
+                if not response.is_success or "application/json" in response.headers.get("content-type", ""):
+                    raise FeishuError("无法下载表格附件，请检查应用的素材下载权限，以及执行表是否允许下载。")
+                disposition = Message()
+                disposition["Content-Disposition"] = response.headers.get("content-disposition", "")
+                filename = disposition.get_filename() or name
+                filename = unquote(filename).replace("\\", "/").split("/")[-1].replace("\x00", "")[:200]
+                content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+                if content_type in {"", "application/octet-stream"}:
+                    content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+                allowed = content_type.startswith(("image/", "video/")) or content_type in {"application/pdf", "text/plain"}
+                if not allowed or content_type == "image/svg+xml" or filename.lower().endswith(".svg"):
+                    raise FeishuError("表格附件类型不支持，请使用图片、视频、PDF、TXT 或日志。")
+                if not Path(filename).suffix:
+                    extension = mimetypes.guess_extension(content_type) or ""
+                    filename += extension
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                size = 0
+                with destination.open("xb") as output:
+                    destination.chmod(0o600)
+                    for chunk in response.iter_bytes(1024 * 1024):
+                        size += len(chunk)
+                        if size > max_bytes:
+                            raise FeishuError("表格附件超过本次导入的文件大小上限。")
+                        output.write(chunk)
+                if not size:
+                    raise FeishuError("下载到的表格附件为空。")
+                return {"name": filename, "size": size, "content_type": content_type}
+        except (httpx.HTTPError, FeishuError) as error:
+            destination.unlink(missing_ok=True)
+            if isinstance(error, FeishuError):
+                raise
+            raise FeishuError("表格附件下载中断，请重新导入或手动补充。") from error
+
     def verify_fields(self):
         settings = self.settings
         fields, page_token = {}, None

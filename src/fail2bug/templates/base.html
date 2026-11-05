@@ -1,21 +1,56 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#f5f6f8">
   <title>{% block title %}Fail2Bug · 批量提 Bug{% endblock %}</title>
-  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}?v=2">
+  <script src="{{ url_for('static', path='theme.js') }}?v=4"></script>
+  <link rel="stylesheet" href="{{ url_for('static', path='app.css') }}?v=6">
   {% block styles %}{% endblock %}
-  <script src="{{ url_for('static', path='choices.js') }}" defer></script>
-  <script src="{{ url_for('static', path='app.js') }}?v=2" defer></script>
+  <script src="{{ url_for('static', path='choices.js') }}?v=4" defer></script>
+  <script src="{{ url_for('static', path='app.js') }}?v=5" defer></script>
 </head>
 <body>
-  <header class="topbar">
-    <a class="brand" href="/"><span class="brand-mark">f<span>2</span>b</span><strong>Fail2Bug</strong><span class="brand-divider"></span><span class="brand-description">失败用例批量提单</span></a>
-    <div class="topbar-right"><span class="mode-dot {{ mode }}"></span>{{ '演示模式' if mode == 'demo' else '飞书已配置' }}<span class="version">v0.1</span></div>
-  </header>
-  {% block content %}{% endblock %}
+  <a class="skip-link" href="#app-content">跳到内容</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="工作台导航">
+      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">f2b</span><strong>Fail2Bug</strong></a>
+      <nav class="side-nav" aria-label="主导航">
+        <a href="/" class="nav-item {{ 'active' if recent is defined else '' }}" {% if recent is defined %}aria-current="page"{% endif %}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          工作台
+        </a>
+        <a href="/#import" class="nav-item">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 16v5h16v-5"/></svg>
+          导入执行表
+        </a>
+        <a href="/#recent" class="nav-item">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.5 7M3 4v7h7m2-4v5l3 2"/></svg>
+          最近批次
+        </a>
+        {% if batch is defined %}
+        <a href="#review-app" class="nav-item active" aria-current="page">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v16h16V4h-4M8 2h8v5H8zM8 13l3 3 5-6"/></svg>
+          审核草稿 <span class="nav-count">{{ batch['items']|length }}</span>
+        </a>
+        {% endif %}
+        {% if show_admin %}
+        <a href="/admin" class="nav-item {{ 'active' if admin_page is defined else '' }}" {% if admin_page is defined %}aria-current="page"{% endif %}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16M8 3v6m8 0v6m-6 0v6"/></svg>
+          管理设置
+        </a>
+        {% endif %}
+      </nav>
+      <div class="sidebar-footer">
+        <button class="theme-toggle" id="theme-toggle" type="button" aria-label="切换深色界面" aria-pressed="false"><span aria-hidden="true">◐</span><span id="theme-label">深色界面</span></button>
+        <span class="connection-label"><span class="mode-dot" aria-hidden="true"></span>{{ '演示模式' if mode == 'demo' else '飞书已配置' }}</span>
+        <span>本机工作台 <span class="version">v0.1</span></span>
+      </div>
+    </aside>
+    <div class="app-content" id="app-content" tabindex="-1">{% block content %}{% endblock %}</div>
+  </div>
   <div id="toast" class="toast" role="status" hidden></div>
 </body>
 </html>

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}管理设置 · Fail2Bug{% endblock %}
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', path='admin.css') }}?v=1">
+<script src="{{ url_for('static', path='admin.js') }}?v=1" defer></script>
+{% endblock %}
+{% block content %}
+<main class="admin-layout">
+  <aside class="settings-nav" aria-label="设置分类">
+    <header><h2>管理设置</h2><p>仅此 Mac 可管理</p></header>
+    <div role="tablist" aria-label="配置分类" aria-orientation="vertical">
+      <button id="tab-target" role="tab" type="button" aria-controls="panel-target" aria-selected="true" tabindex="0"><span>01</span>缺陷表</button>
+      <button id="tab-mapping" role="tab" type="button" aria-controls="panel-mapping" aria-selected="false" tabindex="-1"><span>02</span>字段映射</button>
+      <button id="tab-bot" role="tab" type="button" aria-controls="panel-bot" aria-selected="false" tabindex="-1"><span>03</span>飞书机器人</button>
+      <button id="tab-defaults" role="tab" type="button" aria-controls="panel-defaults" aria-selected="false" tabindex="-1"><span>04</span>导入与默认值</button>
+    </div>
+    <p class="settings-nav-note">设置在保存前不会生效。</p>
+  </aside>
+  <div class="settings-content">
+    <form id="settings-form" autocomplete="off" novalidate>
+      <div id="settings-loading" role="status">正在读取配置…</div>
+      <div id="settings-editor" hidden>
+        <section id="panel-target" role="tabpanel" aria-labelledby="tab-target" tabindex="0">
+          <header class="settings-heading"><span class="eyebrow">DESTINATION</span><h1>缺陷写到哪里</h1><p>指定接收缺陷的飞书多维表格。</p></header>
+          <div class="settings-card">
+            <label for="setting-target_url">缺陷表链接</label>
+            <textarea id="setting-target_url" data-setting="target_url" rows="3" placeholder="https://your-team.feishu.cn/base/…?table=tbl…" spellcheck="false" maxlength="3000"></textarea>
+            <p class="helper">从目标数据表复制链接，保留 table 参数。请先给应用这张表的可编辑权限。</p>
+            <label for="setting-initial_status">新缺陷的初始状态</label>
+            <input id="setting-initial_status" data-setting="initial_status" maxlength="100" placeholder="如：Open(QA)">
+          </div>
+          <div class="settings-note"><strong>切换只影响新导入的批次</strong><p>旧批次仍绑定原表。需要继续提交旧批次时，请先切回原表。</p></div>
+        </section>
+        <section id="panel-mapping" role="tabpanel" aria-labelledby="tab-mapping" tabindex="0" hidden>
+          <header class="settings-heading"><span class="eyebrow">FIELD MAPPING</span><h1>对应你的表单字段</h1><p>右侧填写缺陷表已有的列名，选填项留空则不写入。</p></header>
+          <div class="settings-note mapping-note"><p>操作步骤、预期结果和实际结果可对应同一列，按四段格式合并。测试版本、关联用例和来源链接可共同对应「备注」，首行是写入日期与 QA:（姓名留空），后面保留这三段。</p></div>
+          <div class="settings-card mapping-card">
+            {% for key, label in field_labels.items() %}
+            <label class="mapping-row" for="mapping-{{ key }}"><span>{{ label }}{% if key in ['title','steps','expected','actual','priority','reporter'] %}<span class="required-mark" aria-label="必填"> *</span>{% endif %}</span><input id="mapping-{{ key }}" data-mapping="{{ key }}" maxlength="100" placeholder="{{ '填写目标列名' if key in ['title','steps','expected','actual','priority','reporter'] else '留空不写入' }}"></label>
+            {% endfor %}
+          </div>
+        </section>
+        <section id="panel-bot" role="tabpanel" aria-labelledby="tab-bot" tabindex="0" hidden>
+          <header class="settings-heading"><span class="eyebrow">FEISHU BOT</span><h1>连接你的机器人</h1><p>配置应用身份，以及允许发起解析的同事。</p></header>
+          <div class="settings-card">
+            <label class="setting-toggle" for="setting-bot_enabled"><span><strong>启用机器人</strong><small>接收解析指令，返回审核链接</small></span><input id="setting-bot_enabled" data-setting="bot_enabled" type="checkbox"></label>
+            <label for="setting-app_id">App ID</label><input id="setting-app_id" data-setting="app_id" maxlength="100" spellcheck="false" placeholder="cli_…">
+            <div class="secret-heading"><label for="new-app-secret">App Secret</label><span id="secret-status" class="secret-status" aria-label="密钥状态">未配置</span></div>
+            <input id="new-app-secret" type="password" maxlength="512" autocomplete="new-password" placeholder="留空保留已保存的密钥" spellcheck="false" data-lpignore="true">
+            <p class="helper">已保存的密钥不会返回页面；新密钥存入 macOS 钥匙串。更换 App ID 时需同时填写新密钥。</p>
+            <label for="setting-allowed_users">允许用户 <span class="optional">每行一个 open_id</span></label>
+            <textarea id="setting-allowed_users" data-setting="allowed_users" rows="5" maxlength="10000" spellcheck="false" placeholder="ou_…"></textarea>
+            <p class="helper">让同事私聊发送「我的ID」，或在群里 @机器人 发送「我的ID」，再把他收到的 ou_ 开头 ID 加入这里。</p>
+          </div>
+          <div class="settings-note"><strong>群聊提交人按实际发送者识别</strong><p>允许列表内的同事在群里 @bot 发起解析，提交人就是该同事。还需在飞书开放平台将应用发布并对他可见。</p></div>
+        </section>
+        <section id="panel-defaults" role="tabpanel" aria-labelledby="tab-defaults" tabindex="0" hidden>
+          <header class="settings-heading"><span class="eyebrow">PREFERENCES</span><h1>导入与默认值</h1><p>用于新批次，审核时仍可调整。</p></header>
+          <div class="settings-card">
+            <h2>网页导入默认值</h2>
+            <label for="setting-default_reporter">默认提交人 open_id</label><input id="setting-default_reporter" data-setting="default_reporter" maxlength="100" placeholder="ou_…" spellcheck="false">
+            <label for="setting-default_reporter_name">默认提交人显示名</label><input id="setting-default_reporter_name" data-setting="default_reporter_name" maxlength="100">
+            <p class="helper">通过飞书机器人导入时，始终使用消息发送人，不使用这个默认提交人。</p>
+            <div class="settings-grid">
+              <label for="setting-default_project">所属项目<input id="setting-default_project" data-setting="default_project" maxlength="200"></label>
+              <label for="setting-default_environment">测试环境<input id="setting-default_environment" data-setting="default_environment" maxlength="200"></label>
+            </div>
+          </div>
+          <div class="settings-card">
+            <h2>导入上限</h2>
+            <div class="settings-grid">
+              <label for="setting-max_rows">最大行数<input id="setting-max_rows" data-setting="max_rows" type="number" min="1" max="100000"></label>
+              <label for="setting-max_columns">最大列数<input id="setting-max_columns" data-setting="max_columns" type="number" min="1" max="1000"></label>
+              <label for="setting-max_attachment_mb">单个附件（MB）<input id="setting-max_attachment_mb" data-setting="max_attachment_mb" type="number" min="1" max="200"></label>
+              <label for="setting-max_import_mb">导入文件（MB）<input id="setting-max_import_mb" data-setting="max_import_mb" type="number" min="1" max="500"></label>
+            </div>
+          </div>
+        </section>
+        <footer class="settings-actions">
+          <div><strong id="settings-status" role="status" aria-live="polite">配置已载入</strong><span id="settings-help">验证仅检查权限和字段，不会写入缺陷。</span></div>
+          <div class="settings-buttons"><button id="check-config" class="button secondary" type="button">检查连接</button><button id="save-config" class="button primary" type="submit" disabled>验证并保存 <span aria-hidden="true">→</span></button></div>
+        </footer>
+      </div>
+      <p id="settings-error" class="settings-error" role="alert" hidden></p>
+    </form>
+  </div>
+</main>
+{% endblock %}

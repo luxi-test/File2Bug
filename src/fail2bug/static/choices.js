@@ -7,6 +7,7 @@
     if (!config.multiple) {
       const select = document.createElement('select');
       select.setAttribute('aria-label', config.label);
+      if (host.id) select.id = host.id + '-control';
       select.append(new Option(config.placeholder || '请选择', ''));
       for (const option of options) select.append(new Option(option, option));
       function set(next) {
@@ -24,6 +25,7 @@
     }
     const details = document.createElement('details'); details.className = 'multi-select';
     const summary = document.createElement('summary'); summary.setAttribute('aria-label', config.label);
+    if (host.id) summary.id = host.id + '-control';
     const text = document.createElement('span'); summary.append(text);
     const panel = document.createElement('div'); panel.className = 'multi-panel';
     const search = document.createElement('input'); search.type = 'search'; search.placeholder = '搜索选项'; search.setAttribute('aria-label', `搜索${config.label}`);

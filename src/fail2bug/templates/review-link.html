@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% block title %}打开审核页面 · Fail2Bug{% endblock %}
 {% block content %}
-<main class="home review-entry" data-review-batch="{{ batch_id }}">
-  <div class="eyebrow">飞书 → 审核与补充</div>
+<main class="entry-page review-entry" data-review-batch="{{ batch_id }}">
+  <section class="entry-panel"><span class="entry-symbol" aria-hidden="true">↗</span>
   <h1 id="review-entry-title">正在打开审核页面</h1>
   <p class="lead" id="review-entry-message" role="status">正在验证当前批次的访问链接…</p>
   <p class="helper">链接只用于本批次的内容补充、附件和确认写入，有效期 24 小时。</p>
+  </section>
 </main>
 <script src="{{ url_for('static', path='review-link.js') }}" defer></script>
 {% endblock %}

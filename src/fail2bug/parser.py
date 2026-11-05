@@ -59,6 +59,14 @@ def column_header(value) -> str:
     return HEADER_ALIASES.get(header, header)
 
 
+def title_without_module(title: str, module: str) -> str:
+    if module:
+        for prefix in (f"[{module}]", f"【{module}】"):
+            if title.startswith(prefix):
+                return title[len(prefix):].lstrip()
+    return title
+
+
 def normalize_result(value) -> str:
     text = clean(cell_text(value)).lower()
     # 仅处理明确的双语标签，避免把“通过(但失败)”错误识别成通过。
@@ -99,7 +107,7 @@ def parse_table(rows: list[list], source_url: str) -> dict:
         module = values.get("module", "")
         item = Draft(
             id=str(uuid4()), case_id=values.get("case_id", ""), row_no=row_no,
-            title=f"[{module}] {title}" if module and title else title,
+            title=title_without_module(title, module),
             module=module, source_feature=values.get("source_feature", ""), priority=clean(values.get("priority", "")).upper(),
             preconditions=values.get("preconditions", ""), test_data=values.get("test_data", ""),
             steps=values.get("steps", ""), frequency_evidence=values.get("frequency_evidence", ""),

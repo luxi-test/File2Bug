@@ -14,12 +14,15 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     app_id: str = ""
     app_secret: SecretStr = SecretStr("")
+    app_secret_keychain: str = ""
     target_app_token: str = ""
     target_table_id: str = ""
     target_url: str = ""
     source_url: str = ""
     access_key: SecretStr = SecretStr("")
+    access_key_keychain: str = ""
     allowed_users: str = ""
+    bot_enabled: bool = True
     max_rows: int = 10000
     max_columns: int = 100
     max_attachment_mb: int = 200
@@ -52,6 +55,12 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_live(self):
+        from .credentials import Keychain
+        for key in ("app_secret", "access_key"):
+            reference = getattr(self, key + "_keychain")
+            if reference and not getattr(self, key).get_secret_value():
+                secret = Keychain("file2bug." + key.replace("_", "-")).get(reference)
+                setattr(self, key, SecretStr(secret))
         if self.mode == "live":
             required = ("app_id", "target_app_token", "target_table_id")
             missing = [key for key in required if not getattr(self, key).strip()]

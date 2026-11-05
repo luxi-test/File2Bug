@@ -1,8 +1,16 @@
 {% extends "base.html" %}
+{% block title %}进入工作台 · Fail2Bug{% endblock %}
 {% block content %}
-<main class="home">
-  <div class="eyebrow">团队工具</div><h1>打开你的提单工作台</h1>
-  <p class="lead">输入管理员配置的访问口令，继续审核和提交。</p>
-  <form id="login-form" class="import-panel"><label for="access-key">访问口令</label><div class="import-input"><input id="access-key" type="password" autocomplete="current-password" required placeholder="输入访问口令"><button class="button primary" type="submit">进入工作台</button></div></form>
+<main class="entry-page">
+  <section class="entry-panel" aria-labelledby="login-heading">
+    <span class="entry-symbol" aria-hidden="true">⌘</span>
+    <h1 id="login-heading">打开你的提单工作台</h1>
+    <p class="lead">输入访问口令，继续审核和提交。</p>
+    <form id="login-form">
+      <label for="access-key">访问口令</label>
+      <input id="access-key" type="password" autocomplete="current-password" required placeholder="输入访问口令">
+      <button class="button primary full-width" type="submit">进入工作台 <span aria-hidden="true">→</span></button>
+    </form>
+  </section>
 </main>
 {% endblock %}

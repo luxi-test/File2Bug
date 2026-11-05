@@ -55,6 +55,50 @@ def test_identity_works_before_allowlist_without_granting_access(tmp_path):
     assert not service.calls
 
 
+@pytest.mark.parametrize('message_type', ['text', 'post'])
+@pytest.mark.parametrize('command', ['我的ID', 'whoami'])
+def test_group_identity_uses_sender_before_allowlist_and_deduplicates(tmp_path, message_type, command):
+    settings = Settings(_env_file=None, database=tmp_path/'db.sqlite')
+    store = Store(settings.database)
+    client, service = Client(), Service(store)
+    handler = make_message_handler(settings, store, client, 'ou_bot', service, ImmediateExecutor())
+    incoming = event('@_user_1 '+command, chat_type='group')
+    incoming.event.sender.sender_id.open_id = 'ou_colleague'
+    incoming.event.message.mentions = [NS(id=NS(open_id='ou_bot'))]
+    if message_type == 'post':
+        incoming.event.message.message_type = 'post'
+        incoming.event.message.content = json.dumps({'zh_cn': {'content': [[
+            {'tag': 'at', 'user_id': 'ou_bot'}, {'tag': 'text', 'text': ' '+command},
+        ]]}})
+    handler(incoming)
+    handler(incoming)
+    assert len(client.messages) == 1
+    assert 'ou_colleague' in client.messages[0][1]
+    assert 'ou_bot' not in client.messages[0][1]
+    assert '允许用户' in client.messages[0][1]
+    assert not service.calls
+    assert not store.chat_session('chat', 'ou_colleague')
+    # 查到本人 ID 不会自动放开解析权限。
+    incoming.header.event_id = 'parse-after-query'
+    incoming.event.message.message_type = 'text'
+    incoming.event.message.content = json.dumps({'text': '@_user_1 解析 https://test.feishu.cn/sheets/abc'})
+    handler(incoming)
+    assert not service.calls
+
+
+@pytest.mark.parametrize('mentioned', [None, 'ou_other'])
+def test_group_identity_requires_mentioning_this_bot(tmp_path, mentioned):
+    settings = Settings(_env_file=None, database=tmp_path/'db.sqlite')
+    store = Store(settings.database)
+    client, service = Client(), Service(store)
+    handler = make_message_handler(settings, store, client, 'ou_bot', service, ImmediateExecutor())
+    incoming = event('我的ID', chat_type='group')
+    incoming.event.message.mentions = [NS(id=NS(open_id=mentioned))] if mentioned else []
+    handler(incoming)
+    assert not client.messages
+    assert not (tmp_path/'last-identity.json').exists()
+
+
 @pytest.mark.parametrize('link', ['{url}', '[执行结果 V1.0]({url})'])
 def test_bot_import_uses_sender_as_reporter(tmp_path, link):
     settings = Settings(_env_file=None, database=tmp_path / "db.sqlite", allowed_users="ou_me")
@@ -80,3 +124,20 @@ def test_bot_reads_spreadsheet_link_in_rich_text(tmp_path):
     ]]})
     handler(incoming)
     assert service.calls == [(url, "ou_me")]
+
+
+def test_group_at_bot_uses_actual_colleague_and_keeps_sessions_separate(tmp_path):
+    settings = Settings(_env_file=None, database=tmp_path/'db.sqlite', allowed_users='ou_me,ou_colleague')
+    store = Store(settings.database)
+    client, service = Client(), Service(store)
+    handler = make_message_handler(settings, store, client, 'ou_bot', service, ImmediateExecutor())
+    for index, user_id in enumerate(('ou_me', 'ou_colleague')):
+        incoming = event('@_user_1 解析 https://test.feishu.cn/sheets/abc', f'group-{index}', chat_type='group')
+        incoming.event.sender.sender_id.open_id = user_id
+        incoming.event.message.mentions = [NS(id=NS(open_id='ou_bot'))]
+        handler(incoming)
+    assert [reporter for _, reporter in service.calls] == ['ou_me', 'ou_colleague']
+    first = store.chat_session('chat', 'ou_me')['batch_id']
+    second = store.chat_session('chat', 'ou_colleague')['batch_id']
+    assert first != second
+    assert store.get(second)['defaults']['reporter'] == 'ou_colleague'

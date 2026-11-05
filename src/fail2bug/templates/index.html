@@ -1,25 +1,53 @@
 {% extends "base.html" %}
 {% block content %}
 <main class="home">
-  <div class="eyebrow">从执行结果到缺陷单</div>
-  <h1>少一点复制粘贴，<br><span>多一点测试时间。</span></h1>
-  <p class="lead">导入执行表，检查失败用例，一次确认完成提单。</p>
-  <div class="flow"><span><b>01</b> 导入执行表</span><i>→</i><span><b>02</b> 检查与修改</span><i>→</i><span><b>03</b> 批量提交</span></div>
-  <section class="import-panel">
-    <div class="panel-heading"><h2>从飞书执行表开始</h2><span class="tag">电子表格</span></div>
-    <form id="import-form"><label for="sheet-url">执行表链接</label><div class="import-input"><input id="sheet-url" type="url" value="{{ source_url }}" placeholder="https://your-team.feishu.cn/sheets/…" required autocomplete="off"><button class="button primary" type="submit" {% if mode == 'demo' %}disabled{% endif %}>读取失败用例 <span>→</span></button></div></form>
-    <p class="helper">{{ '当前为演示模式。先用示例走一遍完整流程，配置飞书后即可读取真实执行表。' if mode == 'demo' else '应用需要拥有执行表的阅读权限。每条 fail 生成一条草稿，确认后才会写入缺陷表。' }}</p>
-    <div class="demo-row"><div><strong>先试一份示例</strong><span>含 5 条失败用例，可体验修改、勾选和模拟提交</span></div><button id="demo-button" class="button secondary" type="button">体验示例 <span>↗</span></button></div>
+  <aside class="import-column" aria-labelledby="import-heading">
+    <header class="column-heading" id="import"><h2 id="import-heading">导入执行结果</h2><p>选一份执行表，生成待审核的缺陷。</p></header>
+    <section class="import-panel">
+      <div class="panel-heading"><h3>飞书电子表格</h3><span class="tag">在线</span></div>
+      <form id="import-form">
+        <label for="sheet-url">执行表链接</label>
+        <input id="sheet-url" type="url" value="{{ source_url }}" placeholder="https://your-team.feishu.cn/sheets/…" required autocomplete="off">
+        <button class="button primary full-width" type="submit" {% if mode == 'demo' %}disabled{% endif %}>读取失败用例 <span aria-hidden="true">↗</span></button>
+      </form>
+      <p class="helper">{{ '演示模式下可先体验示例。' if mode == 'demo' else '请确保应用有执行表的阅读权限。' }}</p>
+    </section>
+    <section class="import-panel local-import-panel" id="local-import">
+      <div class="panel-heading"><h3>本地文件</h3><span class="tag">Excel / ZIP</span></div>
+      <form id="local-import-form">
+        <label for="local-file">执行表与证据</label>
+        <input id="local-file" type="file" accept=".xlsx,.zip" required>
+        <label for="local-sheet">工作表名称 <span class="optional">可选</span></label>
+        <input id="local-sheet" placeholder="默认使用第一个工作表" autocomplete="off">
+        <button class="button primary full-width" type="submit">导入文件 <span aria-hidden="true">↑</span></button>
+      </form>
+      <p class="helper">支持 .xlsx、.zip。内嵌图片自动关联，外部截图和视频请与表格一起打包。</p>
+    </section>
+    <div class="demo-row"><div><strong>先体验一下</strong><span>5 条示例缺陷，走一遍审核流程。</span></div><button id="demo-button" class="button secondary" type="button">打开示例 <span aria-hidden="true">→</span></button></div>
+  </aside>
+  <section class="home-content" aria-labelledby="home-heading">
+    <header class="page-heading"><div><h1 id="home-heading">测试结束，提单开始。</h1><p class="lead">导入、审核、确认写入。把时间留给测试。</p></div></header>
+    <ol class="workflow" aria-label="提单流程">
+      <li><span class="step-number">01</span><div><strong>导入执行表</strong><span>提取失败用例与证据</span></div></li>
+      <li><span class="step-number">02</span><div><strong>审核与补充</strong><span>检查分类、描述和附件</span></div></li>
+      <li><span class="step-number">03</span><div><strong>确认写入</strong><span>批量生成飞书缺陷单</span></div></li>
+    </ol>
+    <section class="recent" id="recent" aria-labelledby="recent-heading">
+      <div class="section-heading"><h2 id="recent-heading">最近批次</h2><span>{{ recent|length }} 个批次</span></div>
+      {% if recent %}
+      <div class="batch-list">
+        {% for batch in recent %}
+        {% set succeeded = batch['items']|selectattr('status','equalto','succeeded')|list|length %}
+        <a href="/batches/{{ batch.id }}" class="batch-link">
+          <span class="document-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 3H5v18h14V8zM14 3v5h5M8 12h8m-8 4h6"/></svg></span>
+          <div class="batch-description"><strong>{{ batch.title }}</strong><span>{{ batch.created_at[:10] }} · {{ batch['items']|length }} 条缺陷 · {{ '示例' if batch.mode == 'demo' else ('本地文件' if batch.get('source_label', '').startswith('local:') else '飞书执行表') }}</span></div>
+          <span class="batch-state">{{ '已写入' if batch['items'] and succeeded == batch['items']|length else '审核草稿' }}</span><span class="batch-link-arrow" aria-hidden="true">↗</span>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}<div class="empty-state"><span class="empty-symbol" aria-hidden="true">▤</span><h3>第一份草稿，从这里开始</h3><p>从左侧导入执行结果，或打开示例。</p></div>{% endif %}
+    </section>
+    <footer class="home-footer">每条 fail 生成一份草稿，由你审核后写入。</footer>
   </section>
-  <section class="import-panel local-import-panel">
-    <div class="panel-heading"><h2>导入本地执行结果和附件</h2><span class="tag">Excel / ZIP</span></div>
-    <form id="local-import-form"><label for="local-file">选择 .xlsx，或包含执行表和证据文件的 .zip</label><input id="local-file" type="file" accept=".xlsx,.zip" required><div class="import-input"><input id="local-sheet" aria-label="工作表名称" placeholder="工作表名称（留空取第一个）"><button class="button primary" type="submit">导入文件 →</button></div></form>
-    <p class="helper">Excel 内嵌图片按用例行关联；外部截图、视频请与执行表一起打包，证据列填写相对路径或文件名。只生成草稿，确认后才写入缺陷库。</p>
-  </section>
-  <section class="recent"><div class="section-heading"><h2>最近的批次</h2><span>{{ recent|length }} 个批次</span></div>
-    {% if recent %}<div class="batch-list">{% for batch in recent %}<a href="/batches/{{ batch.id }}" class="batch-link"><span class="document-icon">▤</span><div><strong>{{ batch.title }}</strong><span>{{ batch.created_at[:10] }} · {{ batch['items']|length }} 条失败 · {{ '示例' if batch.mode == 'demo' else ('本地文件' if batch.get('source_label', '').startswith('local:') else '飞书执行表') }}</span></div><span class="batch-link-arrow">→</span></a>{% endfor %}</div>
-    {% else %}<div class="empty-state"><span>▤</span><strong>还没有导入记录</strong><p>导入执行表或打开示例，开始第一批提单。</p></div>{% endif %}
-  </section>
-  <footer>生成草稿后由你确认，每一步都有提交结果。</footer>
 </main>
 {% endblock %}
