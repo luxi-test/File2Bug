@@ -1,6 +1,7 @@
 import threading
 import time
 import re
+import logging
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse, urlencode, urlunparse
 
@@ -8,6 +9,9 @@ import httpx
 
 from .config import Settings
 from .parser import InputError
+
+LOGGER = logging.getLogger(__name__)
+TOKEN_INVALID_CODES = {99991663, 99991664, 99991665, 99991666, 99991668}
 
 
 class FeishuError(ValueError):
@@ -48,14 +52,17 @@ class FeishuClient:
         self.http = httpx.Client(timeout=30, transport=transport)
         self._token = ""
         self._expires = 0.0
+        self._expires_wall = 0.0
         self._lock = threading.Lock()
 
     def close(self):
         self.http.close()
 
-    def _access_token(self) -> str:
+    def _access_token(self, *, rejected_token: str | None = None) -> str:
         with self._lock:
-            if self._token and time.monotonic() < self._expires:
+            # 同时校验实际时间，避免系统休眠后继续使用缓存中的过期凭证。
+            if (self._token and self._token != rejected_token
+                    and time.monotonic() < self._expires and time.time() < self._expires_wall):
                 return self._token
             try:
                 response = self.http.post(self.BASE_URL + "/auth/v3/tenant_access_token/internal", json={"app_id": self.settings.app_id, "app_secret": self.settings.app_secret.get_secret_value()})
@@ -66,12 +73,16 @@ class FeishuClient:
             if data.get("code", 0) != 0 or not data.get("tenant_access_token"):
                 raise FeishuError(f"获取应用凭证失败（错误码 {data.get('code', '未知')}），请检查 APP_ID 和 APP_SECRET。")
             self._token = data["tenant_access_token"]
-            self._expires = time.monotonic() + max(0, int(data.get("expire", 7200)) - 300)
+            ttl = max(0, int(data.get("expire", 7200)) - 300)
+            self._expires = time.monotonic() + ttl
+            self._expires_wall = time.time() + ttl
             return self._token
 
     def _request(self, method: str, path: str, *, json=None, params=None, writing=False, data=None, files=None):
         token = self._access_token()
-        for attempt in range(3):
+        refreshed = False
+        rate_retries = 0
+        while True:
             try:
                 body = {"data": data, "files": files} if files is not None else {"json": json}
                 if files:
@@ -92,11 +103,18 @@ class FeishuClient:
                 error = SubmissionUnknown if writing else FeishuError
                 raise error("飞书返回了无法识别的响应，请稍后重试。") from exc
             code = body.get("code", 0)
+            # 只有明确的鉴权拒绝才重新获取凭证；网络不确定的写入仍走原幂等流程。
+            if code in TOKEN_INVALID_CODES and not refreshed:
+                LOGGER.warning("飞书访问凭证被拒绝（错误码 %s），重新获取后重试一次。", code)
+                token = self._access_token(rejected_token=token)
+                refreshed = True
+                continue
             if writing and code in {1255001, 1255002, 1255003, 1255004, 1255005, 1255040}:
                 raise SubmissionUnknown(f"飞书处理异常（错误码 {code}），提交结果待确认；请沿用原操作重试。")
             if response.status_code == 429 or code == 1254290:
-                if attempt < 2:
-                    time.sleep(0.5 * (2 ** attempt))
+                if rate_retries < 2:
+                    time.sleep(0.5 * (2 ** rate_retries))
+                    rate_retries += 1
                     continue
             if not response.is_success or code != 0:
                 if code == 99991672:
@@ -105,13 +123,14 @@ class FeishuClient:
                     if scopes:
                         raise FeishuError("应用尚未开通所需的应用身份权限，请开通以下任一权限并发布应用版本：" + "、".join(scopes) + "。权限入口：https://open.feishu.cn/app/" + self.settings.app_id + "/auth")
                     raise FeishuError("飞书拒绝访问（99991672）。请检查应用身份权限是否已开通并发布，以及应用是否已添加为该表的协作者。")
-                if code in {91403, 1254302}:
+                if code == 1254302:
+                    raise FeishuError("目标多维表格的高级权限角色拒绝访问（1254302）。请在该表的“添加文档应用”中将当前应用设为“可管理”，或在高级权限中给包含应用的群组授予目标数据表的读写权限；仅授予文档“可编辑”可能仍无法访问子表。")
+                if code == 91403:
                     raise FeishuError(f"应用没有访问这张表所需的文档权限（{code}）。请将应用添加为表格协作者；执行表需要阅读权限，缺陷表需要编辑权限。")
                 # 不回显整段响应，避免日志或页面泄漏服务端返回的敏感字段。
                 raise FeishuError(f"飞书请求失败（HTTP {response.status_code}，错误码 {code}）。请检查字段类型、应用权限及协作者设置。")
             # 机器人信息接口的 bot 位于响应顶层，其余接口通常使用 data。
             return body.get("data", body)
-        raise FeishuError("飞书请求频率过高，请稍后重试。")
 
     def read_sheet(self, url: str) -> tuple[list[list], str, str]:
         token, selected = parse_sheet_url(url)

@@ -71,6 +71,8 @@ def test_local_excel_can_be_imported_through_web(tmp_path):
         assert response.status_code==200
         batch=response.json()
         assert len(batch['items'])==1
+        assert batch['items'][0]['case_title']=='保存照片'
+        assert '没有保存' in batch['items'][0]['title']
         assert batch['items'][0]['frequency']=='Very High / Frequent'
         assert 'problem_type' not in batch['defaults'] and 'frequency' not in batch['defaults']
 
@@ -91,6 +93,12 @@ def test_review_link_allows_only_one_batch_without_team_login(tmp_path):
         assert all('HttpOnly' in cookie for cookie in response.headers.get_list('set-cookie'))
         assert '缺陷清单' in client.get(response.json()['path']).text
         assert client.get(f"/api/batches/{first['id']}").status_code==200
+        item_id=first['items'][0]['id']
+        preview=client.post(f"/api/batches/{first['id']}/items/{item_id}/title-suggestion",json={'actual':'点击保存后页面闪退'})
+        assert preview.status_code==200 and preview.json()['value']=='点击保存后页面闪退'
+        assert app.state.service.store.get(first['id'])['revision']==first['revision']
+        other_id=second['items'][0]['id']
+        assert client.post(f"/api/batches/{second['id']}/items/{other_id}/title-suggestion",json={'actual':'新内容'}).status_code==401
         assert client.get(f"/api/batches/{second['id']}").status_code==401
         assert client.post('/api/batches/demo').status_code==401
         assert '访问口令' in client.get('/').text

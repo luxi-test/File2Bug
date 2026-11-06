@@ -2,6 +2,7 @@ import unicodedata
 from uuid import uuid4
 
 from .models import Draft, draft_issues
+from .titles import apply_title, title_without_module
 
 
 class InputError(ValueError):
@@ -59,14 +60,6 @@ def column_header(value) -> str:
     return HEADER_ALIASES.get(header, header)
 
 
-def title_without_module(title: str, module: str) -> str:
-    if module:
-        for prefix in (f"[{module}]", f"【{module}】"):
-            if title.startswith(prefix):
-                return title[len(prefix):].lstrip()
-    return title
-
-
 def normalize_result(value) -> str:
     text = clean(cell_text(value)).lower()
     # 仅处理明确的双语标签，避免把“通过(但失败)”错误识别成通过。
@@ -108,12 +101,14 @@ def parse_table(rows: list[list], source_url: str) -> dict:
         item = Draft(
             id=str(uuid4()), case_id=values.get("case_id", ""), row_no=row_no,
             title=title_without_module(title, module),
+            case_title=title,
             module=module, source_feature=values.get("source_feature", ""), priority=clean(values.get("priority", "")).upper(),
             preconditions=values.get("preconditions", ""), test_data=values.get("test_data", ""),
             steps=values.get("steps", ""), frequency_evidence=values.get("frequency_evidence", ""),
             reproductions=values.get("reproductions", ""), attempts=values.get("attempts", ""),
             expected=values.get("expected", ""), actual=values.get("actual") or values.get("remark", ""), evidence=values.get("evidence", ""),
         ).model_dump()
+        apply_title(item)
         item["issues"] = draft_issues(item)
         if not item["case_id"]:
             item["issues"].append("源表缺少用例ID，请先补齐源表后重新导入")

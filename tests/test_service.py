@@ -133,6 +133,60 @@ def test_partial_failure_retries_failed_item_only(service):
     assert final["items"][0]["status"] == "succeeded"
 
 
+def test_actual_edits_regenerate_auto_titles_but_preserve_manual_titles(service):
+    from fail2bug.models import DraftEdit
+    batch = new_batch(service)
+    def edit_first(value, **changes):
+        edits = [{key:item.get(key, '') for key in DraftEdit.model_fields} for item in value['items']]
+        edits[0].update(changes)
+        return service.update(value['id'], ReviewUpdate(revision=value['revision'], defaults=value['defaults'], items=edits))
+    batch = edit_first(batch, actual='点击保存后页面闪退')
+    assert batch['items'][0]['title'] == '点击保存后页面闪退'
+    batch = edit_first(batch, title='人工确认的标题')
+    batch = edit_first(batch, actual='再次保存时页面卡死')
+    assert batch['items'][0]['title'] == '人工确认的标题'
+    assert batch['items'][0]['inference']['title']['source'] == 'manual'
+
+
+def test_placeholder_actual_requires_title_review_before_submit(service):
+    batch = ready(service, new_batch(service))
+    def placeholder(value):
+        from fail2bug.titles import apply_title
+        value['items'][0]['actual'] = '已提单'
+        apply_title(value['items'][0])
+    batch = service.store.mutate(batch['id'], placeholder)
+    with pytest.raises(InputError, match='补充缺陷标题'):
+        service.submit(batch['id'], batch['revision'])
+    assert not service.client.calls
+
+
+def test_title_preview_is_read_only_and_protects_submitted_or_uncertain_items(service):
+    batch = new_batch(service)
+    item = batch['items'][0]
+    result = service.title_suggestion(batch['id'], item['id'], '点击保存后页面闪退')
+    assert result['value'] == '点击保存后页面闪退'
+    assert service.store.get(batch['id']) == batch
+    for status, record_id in [('unknown', ''), ('submitting', ''), ('succeeded', 'rec_existing')]:
+        service.store.mutate(batch['id'], lambda value: value['items'][0].update(status=status, record_id=record_id))
+        with pytest.raises(Conflict):
+            service.title_suggestion(batch['id'], item['id'], '新标题')
+
+
+def test_existing_draft_titles_without_provenance_are_not_silently_regenerated(service):
+    batch = new_batch(service)
+    def legacy(value):
+        item = value['items'][0]
+        item.pop('case_title', None)
+        item['inference'].pop('title', None)
+        item['title'] = '已经审核过的旧标题'
+    batch = service.store.mutate(batch['id'], legacy)
+    from fail2bug.models import DraftEdit
+    edits = [{key:item.get(key, '') for key in DraftEdit.model_fields} for item in batch['items']]
+    edits[0]['actual'] = '点击后页面闪退'
+    result = service.update(batch['id'], ReviewUpdate(revision=batch['revision'], defaults=batch['defaults'], items=edits))
+    assert result['items'][0]['title'] == '已经审核过的旧标题'
+
+
 def test_review_revision_and_target_binding(service):
     batch = ready(service, new_batch(service))
     with pytest.raises(Conflict, match="已有更新"):

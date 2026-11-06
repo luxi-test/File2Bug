@@ -9,6 +9,7 @@ class Draft(BaseModel):
     case_id: str
     row_no: int
     title: str
+    case_title: str = ""
     module: str = ""
     source_feature: str = ""
     preconditions: str = ""
@@ -70,6 +71,8 @@ class ReviewUpdate(BaseModel):
 def draft_issues(item: dict) -> list[str]:
     fields = {"title": "缺陷标题", "steps": "复现步骤", "expected": "预期结果", "actual": "实际结果"}
     issues = [f"请补充{label}" for key, label in fields.items() if not str(item.get(key, "")).strip()]
+    if item.get('title') and item.get('inference', {}).get('title', {}).get('needs_review'):
+        issues.append('请根据实际表现补充缺陷标题')
     if item.get("priority") not in {"P0", "P1", "P2", "P3"}:
         issues.append("请选择有效优先级")
     return issues

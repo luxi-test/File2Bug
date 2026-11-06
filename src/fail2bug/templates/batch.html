@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}审核草稿 · Fail2Bug{% endblock %}
-{% block styles %}<link rel="stylesheet" href="{{ url_for('static', path='review.css') }}?v=5">{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static', path='review.css') }}?v=6">{% endblock %}
 {% block content %}
 <main class="workspace" id="review-app">
   <aside class="defaults-panel" aria-labelledby="defaults-heading">
@@ -42,6 +42,7 @@
   <div class="dialog-heading"><div><span class="dialog-context" id="edit-case"></span><h2 id="edit-heading">检查缺陷内容</h2></div><button class="icon-button" id="close-dialog" type="button" aria-label="关闭">×</button></div>
   <div class="dialog-body">
     <div class="edit-title-row"><label>缺陷标题<input name="title" maxlength="300" required></label><label>优先级<select name="priority"><option>P0</option><option>P1</option><option>P2</option><option>P3</option></select></label></div>
+    <div class="title-assist"><div><p id="original-case-title" class="helper" hidden></p><p id="title-hint" class="helper" role="status"></p></div><button id="suggest-title" class="button secondary" type="button">根据实际结果生成</button></div>
     <div class="classification-grid">
       {% for key, label in [('module','模块'),('submodule','子模块'),('problem_type','问题类型'),('frequency','发生概率')] %}
       {% if batch.get('default_hints',{}).get(key,{}).get('enabled') %}<div class="field"><label>{{ label }}</label><div data-choice-item="{{ key }}" data-label="{{ label }}"></div></div>{% endif %}

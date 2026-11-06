@@ -13,6 +13,7 @@ from .inference import apply_frequency, infer_item
 from .repro import format_repro
 from .local_source import open_local, read_workbook
 from .online_source import attach_sheet_media
+from .titles import apply_title, suggest_title
 
 METADATA = {"problem_type": "问题类型", "module": "模块", "submodule": "子模块", "frequency": "发生概率"}
 EDITABLE_METADATA = {*METADATA, "selected", "preconditions", "test_data", "steps", "expected", "actual"}
@@ -114,6 +115,14 @@ class Service:
     def _effective(self, item, defaults, key):
         return item.get(key, "")
 
+    def title_suggestion(self, batch_id, item_id, actual):
+        item = next((item for item in self.store.get(batch_id)['items'] if item['id'] == item_id), None)
+        if not item:
+            raise KeyError(item_id)
+        if item.get('record_id') or item['status'] in {'unknown', 'submitting'}:
+            raise Conflict('已提单或结果待确认的条目保留原标题。')
+        return suggest_title(item.get('case_title') or item.get('title', ''), actual, item.get('module', ''))
+
     def _snapshot(self, item, defaults):
         values = {key: self._effective(item, defaults, key) for key in METADATA if self.settings.fields.get(key)}
         if self.settings.field_attachments:
@@ -175,6 +184,9 @@ class Service:
             for item in batch["items"]:
                 edit = edits[item["id"]].model_dump(exclude={"id"}, exclude_unset=True)
                 previous_actual = item.get('actual', '')
+                title_changed = 'title' in edit and edit['title'] != item.get('title', '')
+                title_hint = item.get('inference', {}).get('title', {})
+                auto_title = title_hint.get('source') in {'actual', 'case_title'} and item.get('title') == title_hint.get('value')
                 manual = {key for key in METADATA if key in edit and edit[key] != item.get(key, '')}
                 if item["status"] == "unknown":
                     if any(item.get(key, "") != value for key, value in edit.items() if key != "selected"):
@@ -185,6 +197,11 @@ class Service:
                 if "module" in edit and edit["module"] != item.get("module") and item.get("inference", {}).get("submodule", {}).get("source") == "module_fallback" and ("submodule" not in edit or edit["submodule"] == item.get("submodule")):
                     edit["submodule"] = edit["module"].replace("\n", "、")
                 item.update(edit)
+                if not item.get('record_id') and item['status'] != 'unknown':
+                    if title_changed:
+                        item.setdefault('inference', {})['title'] = {'value':item['title'], 'source':'manual', 'reason':'人工修改', 'needs_review':False}
+                    elif item.get('actual', '') != previous_actual and auto_title:
+                        apply_title(item)
                 for key in manual:
                     item.setdefault('inference', {})[key] = {'value':item.get(key,''),'reason':'人工修改','source':'manual'}
                 if item.get('actual','') != previous_actual:

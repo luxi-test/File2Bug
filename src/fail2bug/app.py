@@ -34,6 +34,10 @@ class SubmitRequest(BaseModel):
     revision: int
 
 
+class TitleSuggestionRequest(BaseModel):
+    actual: str = Field(max_length=20000)
+
+
 class LoginRequest(BaseModel):
     access_key: str = Field(max_length=1000)
 
@@ -211,6 +215,10 @@ def create_app(settings: Settings | None = None, client=None, *, configuration=N
     @app.get("/api/batches/{batch_id}")
     def get_batch(batch_id: str, service: Service = Depends(current_service)):
         return public_batch(service.review(batch_id))
+
+    @app.post('/api/batches/{batch_id}/items/{item_id}/title-suggestion')
+    def title_suggestion(batch_id: str, item_id: str, body: TitleSuggestionRequest, service: Service = Depends(current_service)):
+        return service.title_suggestion(batch_id, item_id, body.actual)
 
     @app.post("/api/batches/demo")
     def demo(service: Service = Depends(current_service)):

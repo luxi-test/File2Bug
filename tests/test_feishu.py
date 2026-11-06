@@ -26,6 +26,119 @@ def test_missing_scope_explains_application_permission_and_publication():
         client.verify_fields()
 
 
+def test_advanced_role_error_explains_subtable_permissions():
+    client = client_for(lambda request: httpx.Response(403, json={'code':1254302,'msg':'The role has no permissions.'}))
+    with pytest.raises(FeishuError, match='高级权限.*1254302.*可管理.*目标数据表'):
+        client.verify_fields()
+
+
+@pytest.mark.parametrize('code', [99991663, 99991664, 99991665, 99991666, 99991668])
+def test_rejected_token_refreshes_once_without_logging_credentials(code, caplog):
+    tokens, requests = [], []
+    def route(request):
+        if request.url.path.endswith('tenant_access_token/internal'):
+            token = 'fixture-credential-' + str(len(tokens)+1)
+            tokens.append(token)
+            return httpx.Response(200, json={'code':0,'tenant_access_token':token,'expire':7200})
+        requests.append(request.headers['Authorization'])
+        if len(requests) == 1:
+            return httpx.Response(401, json={'code':code,'msg':'invalid fixture-credential-1'})
+        return httpx.Response(200, json={'code':0,'bot':{'open_id':'ou_bot'}})
+    client = FeishuClient(Settings(_env_file=None), httpx.MockTransport(route))
+    assert client.bot_open_id() == 'ou_bot'
+    assert len(tokens) == 2
+    assert requests == ['Bearer '+token for token in tokens]
+    assert str(code) in caplog.text
+    assert 'fixture-credential' not in caplog.text
+
+
+def test_repeated_auth_failure_is_bounded():
+    attempts = []
+    def reject(request):
+        attempts.append(request)
+        return httpx.Response(401, json={'code':99991663})
+    with pytest.raises(FeishuError, match='99991663'):
+        client_for(reject).bot_open_id()
+    assert len(attempts) == 2
+
+
+@pytest.mark.parametrize('clock', ['wall', 'monotonic'])
+def test_token_cache_expires_when_either_clock_advances(monkeypatch, clock):
+    import fail2bug.feishu as module
+    now = {'wall':1000., 'monotonic':10.}
+    monkeypatch.setattr(module.time, 'time', lambda: now['wall'])
+    monkeypatch.setattr(module.time, 'monotonic', lambda: now['monotonic'])
+    calls = []
+    def route(request):
+        calls.append(request)
+        return httpx.Response(200, json={'code':0,'tenant_access_token':str(len(calls)),'expire':7200})
+    client = FeishuClient(Settings(_env_file=None), httpx.MockTransport(route))
+    assert client._access_token() == '1'
+    assert client._access_token() == '1'
+    # 休眠或时钟调整时，另一计时来源可能没有同步前进。
+    now[clock] += 7201
+    assert client._access_token() == '2'
+    assert len(calls) == 2
+
+
+def test_concurrent_auth_rejections_share_the_new_token():
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+    barrier = threading.Barrier(2)
+    tokens = []
+    def route(request):
+        if request.url.path.endswith('tenant_access_token/internal'):
+            tokens.append('fixture-' + str(len(tokens)+1))
+            return httpx.Response(200, json={'code':0,'tenant_access_token':tokens[-1],'expire':7200})
+        if request.headers['Authorization'] == 'Bearer fixture-1':
+            barrier.wait(timeout=3)
+            return httpx.Response(401, json={'code':99991663})
+        return httpx.Response(200, json={'code':0,'bot':{'open_id':'ou_bot'}})
+    client = FeishuClient(Settings(_env_file=None), httpx.MockTransport(route))
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(client.bot_open_id) for _ in range(2)]
+        assert [future.result(timeout=5) for future in futures] == ['ou_bot', 'ou_bot']
+    assert len(tokens) == 2
+
+
+def test_auth_refresh_preserves_write_idempotency_and_payload():
+    calls = []
+    def route(request):
+        calls.append((request.url.params['client_token'], request.read()))
+        if len(calls) == 1:
+            return httpx.Response(401, json={'code':99991663})
+        return httpx.Response(200, json={'code':0,'data':{'record':{'record_id':'rec_ok'}}})
+    client = client_for(route)
+    assert client.create_record({'title':'example'}, 'stable-operation')['record_id'] == 'rec_ok'
+    assert len(calls) == 2 and calls[0] == calls[1]
+
+
+def test_auth_refresh_does_not_retry_uncertain_writes():
+    calls = []
+    def route(request):
+        calls.append(request)
+        if len(calls) == 1:
+            return httpx.Response(401, json={'code':99991663})
+        raise httpx.ReadTimeout('network timeout')
+    with pytest.raises(SubmissionUnknown):
+        client_for(route).create_record({'title':'example'}, 'stable-operation')
+    assert len(calls) == 2
+
+
+def test_auth_refresh_rewinds_uploaded_file(tmp_path):
+    path = tmp_path/'evidence.png'
+    path.write_bytes(b'fixture-image-content')
+    payloads = []
+    def route(request):
+        payloads.append(request.read())
+        if len(payloads) == 1:
+            return httpx.Response(401, json={'code':99991663})
+        return httpx.Response(200, json={'code':0,'data':{'file_token':'uploaded-file'}})
+    assert client_for(route).upload_media(path, 'evidence.png', 'image/png') == 'uploaded-file'
+    assert len(payloads) == 2
+    assert all(b'fixture-image-content' in body for body in payloads)
+
+
 def test_write_timeout_is_unknown():
     def handler(request):
         assert request.url.params["client_token"] == "stable-token"

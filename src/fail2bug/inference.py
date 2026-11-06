@@ -79,7 +79,7 @@ def infer_item(item: dict, hints: dict, *, only_blank=True) -> dict:
         if feature and feature in options:
             value, reason, source = feature, '需求点与子模块选项完全一致', 'feature'
         else:
-            title = item.get('title', '')
+            title = item.get('case_title') or item.get('title', '')
             matches = sorted({option for option in options if len(option) >= 2 and option in title and option not in item.get('module', '').splitlines()}, key=len, reverse=True)
             if matches and (len(matches) == 1 or len(matches[0]) > len(matches[1])):
                 value, reason, source = matches[0], '标题明确包含已有子模块名', 'title'

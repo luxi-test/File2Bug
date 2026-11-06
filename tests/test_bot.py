@@ -99,6 +99,17 @@ def test_group_identity_requires_mentioning_this_bot(tmp_path, mentioned):
     assert not (tmp_path/'last-identity.json').exists()
 
 
+def test_sdk_dispatcher_acknowledges_reactions_without_chat_commands():
+    lark = pytest.importorskip('lark_oapi')
+    from fail2bug.bot import make_event_dispatcher
+    received = []
+    handler = make_event_dispatcher(lark, lambda data: received.append(data.header.event_type))
+    for event_type in ('im.message.reaction.created_v1', 'im.message.reaction.deleted_v1', 'im.message.receive_v1'):
+        payload = {'schema':'2.0', 'header':{'event_id':event_type,'event_type':event_type}, 'event':{}}
+        assert handler._do_without_validation(json.dumps(payload).encode()) is None
+    assert received == ['im.message.receive_v1']
+
+
 @pytest.mark.parametrize('link', ['{url}', '[执行结果 V1.0]({url})'])
 def test_bot_import_uses_sender_as_reporter(tmp_path, link):
     settings = Settings(_env_file=None, database=tmp_path / "db.sqlite", allowed_users="ou_me")

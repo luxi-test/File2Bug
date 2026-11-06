@@ -59,6 +59,7 @@
     if (item.status === 'unknown') return [];
     const values = [];
     if (!item.record_id) for (const [key, label] of Object.entries({title:'标题',steps:'复现步骤',expected:'预期结果',actual:'实际结果'})) if (!String(item[key] || '').trim()) values.push(label);
+    if (!item.record_id && item.inference?.title?.needs_review && !values.includes('标题')) values.push('缺陷标题');
     for (const [key, label] of Object.entries(metadata)) if (batch.default_hints?.[key]?.enabled && !effective(item, key).trim()) values.push(label);
     return values;
   }
@@ -162,8 +163,12 @@
     const item=batch.items.find(item=>item.id===id); editingId=id;
     $('#edit-case').textContent=`${item.case_id} · 源表第 ${item.row_no} 行`;
     $('#edit-heading').textContent=item.record_id ? '补充已提缺陷字段' : '检查缺陷内容';
+    $('#original-case-title').textContent=item.case_title ? `原用例：${item.case_title}` : '';
+    $('#original-case-title').hidden=!item.case_title;
+    $('#title-hint').textContent=item.inference?.title?.needs_review ? item.inference.title.reason : '概括触发场景和实际异常；手动修改的标题会保留。';
     $('.evidence-details').open = false;
     const frozen=['unknown','submitting'].includes(item.status), coreLocked=frozen || Boolean(item.record_id), parts=reproParts(item);
+    $('#suggest-title').hidden=coreLocked;
     coreFields.forEach(key=>{const input=$('#edit-form').elements.namedItem(key);input.value=key==='preconditions'?parts.premise:key==='steps'?parts.steps:item[key]||'';if(input.tagName==='SELECT')input.disabled=coreLocked;else input.readOnly=frozen || (Boolean(item.record_id) && ['title','evidence'].includes(key));});
     for(const key of Object.keys(itemChoices))delete itemChoices[key];
     document.querySelectorAll('[data-choice-item]').forEach(host=>{
@@ -200,6 +205,16 @@
   }
   $('#draft-rows')?.addEventListener('click',event=>{if(event.target.closest('.row-button'))openItem(event.target.closest('tr').dataset.id);});
   $('#close-dialog').addEventListener('click',()=>$('#edit-dialog').close());
+  $('#suggest-title').addEventListener('click',event=>{
+    const id=editingId, form=$('#edit-form'), actual=form.elements.namedItem('actual').value, title=form.elements.namedItem('title').value;
+    withButton(event.currentTarget,'正在生成…',async()=>{
+      const suggestion=await api(`/api/batches/${batch.id}/items/${id}/title-suggestion`,'POST',{actual});
+      if(!$('#edit-dialog').open || editingId!==id)return;
+      if(form.elements.namedItem('actual').value!==actual || form.elements.namedItem('title').value!==title)throw new Error('描述或标题已变化，请重新生成。');
+      $('#title-hint').textContent=suggestion.reason;
+      if(!suggestion.needs_review)form.elements.namedItem('title').value=suggestion.value;
+    });
+  });
   $('#edit-form').addEventListener('submit',async event=>{event.preventDefault();readDialog();busy=true;render();try{await save();$('#edit-dialog').close();}catch(error){showMessage('#edit-note', error.message);}finally{busy=false;render();}});
   async function save() {
     const payload={revision:batch.revision,defaults:batch.defaults,items:batch.items.map(item=>({id:item.id,selected:item.selected,...Object.fromEntries(fields.map(key=>[key,item[key]||'']))}))};

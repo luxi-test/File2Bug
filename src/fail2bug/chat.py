@@ -52,8 +52,8 @@ class ChatController:
             try:
                 self.client.send_card(chat_id,title,content)
                 return
-            except ValueError:
-                LOGGER.warning('卡片发送失败，改用文字回复。')
+            except ValueError as exc:
+                LOGGER.warning('卡片发送失败，改用文字回复：%s',exc)
         text=title+'\n'+content
         for start in range(0,len(text),6000):
             self.client.send_text(chat_id,text[start:start+6000])

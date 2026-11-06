@@ -107,12 +107,13 @@ def make_message_handler(settings, store, client, bot_id, service, executor):
         except (ValueError,KeyError) as exc:
             try:
                 controller.say(chat_id,'请补充或检查',str(exc) if not isinstance(exc,KeyError) else '没有找到对应批次或文件，请重新选择。')
-            except FeishuError:
-                LOGGER.error('无法发送处理结果，请检查飞书消息权限。')
+            except FeishuError as send_error:
+                LOGGER.error('无法发送处理结果：%s',send_error)
         except Exception:
             LOGGER.exception('聊天操作失败')
             try:client.send_text(chat_id,'处理遇到异常，请检查服务日志后重试；未自动确认写入。')
-            except FeishuError:pass
+            except FeishuError as send_error:
+                LOGGER.error('无法发送异常提示：%s',send_error)
 
     def on_message(data):
         event=data.event;message=event.message;sender=event.sender
@@ -142,6 +143,14 @@ def make_message_handler(settings, store, client, bot_id, service, executor):
     return on_message
 
 
+def make_event_dispatcher(lark, receive):
+    # 表情事件只确认收到，不触发聊天命令或让飞书反复重投。
+    return (lark.EventDispatcherHandler.builder('','')
+            .register_p2_im_message_receive_v1(receive)
+            .register_p2_im_message_reaction_created_v1(lambda data:None)
+            .register_p2_im_message_reaction_deleted_v1(lambda data:None).build())
+
+
 def run_bot():
     try:import lark_oapi as lark
     except ImportError as exc:raise SystemExit('请先安装机器人依赖：pip install -e ".[bot]"') from exc
@@ -166,8 +175,10 @@ def run_bot():
             return
         client=FeishuClient(settings);bot_id=client.bot_open_id();service=Service(settings,store,client)
         on_message=make_message_handler(settings,store,client,bot_id,service,executor)
-        handler=lark.EventDispatcherHandler.builder('','').register_p2_im_message_receive_v1(lambda data:executor.receive(on_message,data)).build()
+        handler=make_event_dispatcher(lark,lambda data:executor.receive(on_message,data))
         ws=lark.ws.Client(settings.app_id,settings.app_secret.get_secret_value(),event_handler=handler,log_level=lark.LogLevel.WARNING)
+        ws.on_reconnecting=lambda:LOGGER.warning('机器人长连接中断，飞书 SDK 正在自动重连。')
+        ws.on_reconnected=lambda:LOGGER.info('机器人长连接已重新建立。')
         LOGGER.info('机器人启动中，支持执行表及 xlsx/zip 导入，返回网页审核链接。')
         ws.start()
     except KeyboardInterrupt:pass

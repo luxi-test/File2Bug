@@ -18,7 +18,8 @@ def test_all_failures_kept_and_actual_not_invented():
     assert missing["actual"] == ""
     assert "请补充实际结果" in missing["issues"]
     assert "重新连接" in result["items"][0]["title"]
-    assert result["items"][0]["title"] == "重新连接后设备名称未更新"
+    assert result["items"][0]["title"] == "重新连接后仍显示旧名称"
+    assert result["items"][0]["case_title"] == "重新连接后设备名称未更新"
 
 
 def test_column_order_and_source_row_numbers():
